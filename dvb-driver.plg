@@ -1,0 +1,298 @@
+<?xml version='1.0' standalone='yes'?>
+<!DOCTYPE PLUGIN [
+  <!ENTITY name      "dvb-driver">
+  <!ENTITY author    "ich777">
+  <!ENTITY version   "2024.01.19">
+  <!ENTITY launch    "Settings/dvb-driver">
+  <!ENTITY gitURL    "https://github.com/&author;/unraid-&name;/raw/master">
+  <!ENTITY pluginURL "&gitURL;/&name;.plg">
+  <!ENTITY md5       "e027ac998998a8abc650b42f18df1079">
+  <!ENTITY plugin    "/boot/config/plugins/&name;">
+  <!ENTITY emhttp    "/usr/local/emhttp/plugins/&name;">
+  <!ENTITY packages  "/boot/config/plugins/&name;/packages">
+]>
+
+<PLUGIN  name="&name;" author="&author;" version="&version;" launch="&launch;" pluginURL="&pluginURL;" min="6.9.0-beta31" support="https://forums.unraid.net/topic/99027-plugin-dvb-driver/">
+
+<CHANGES>
+
+###2024.01.19
+- Style changes
+- Remove System Info from plugin page
+
+###2024.01.09
+- Visual changes
+
+###2024.01.08
+- Add support link to plugin page headline
+- Fix minor style fixes for the plugin pages
+
+###2023.08.31
+- Detect adapters with their Kernel module and version on boot or plugin installation once and generate static list
+- Show adapters which are not known to the plugin
+- Cleanup
+
+###2022.07.20
+- Necessary changes for unRAID 6.11+
+- Cleanup
+
+###2022.04.11
+- Removed warning message from console on boot
+
+###2022.03.30
+- Added Plex PX Series Tuners (Japan) package
+
+###2021.09.17
+- Fixed plugin to escape variables properly
+
+###2021.07.29a
+- Added Plugin Update Helper when up-/downgrading unRAID version
+
+###2021.06.23
+- Changed package download repo
+
+###2021.05.02
+- Fixed error when installing TBS-OS drivers
+
+###2021.04.26
+- Changed changed udev to be compatble with 6.10.0 and up
+
+###2021.04.06
+- Fixed Radio Buttons not showing current selected driver package version
+- Removed Xbox One USB drivers - included in LibreELEC driver package
+- Bumped number of visible DVB Tuners to 16 in WebUI
+
+###2021.04.05
+- Added sleep before reloading udev rules
+- Removed download bar from displaying in terminal
+
+###2021.03.22
+- Use IP address instead of hostname for online check
+
+###2021.03.12
+- Fixed Permissions
+- Added wait for network including timeout
+
+###2020.11.17
+- Added TBS-OpenSource DVB drivers
+
+###2020.11.16
+- Updated support link
+- Fixed a issue with DigitalDevices builds
+- Fixed a issue with Xbox One USB builds
+
+###2020.11.14
+- Added information and warning how to load the needed Kernel Module(s) on system startup to initialize the DVB Card(s) correctly
+- Added autodetection of DVB card and loading needed Kernel Module(s)
+- Show selected Driver-Package version to Plugin page
+
+###2020.11.09
+- Fixed a bug where md5 check errors out
+
+###2020.10.27
+- added LibreELEC, DigitalDevices and Xbox One USB DVB Adapter packages
+- check for old packages
+- updated download links
+
+###2020.10.24
+- Initial release
+
+</CHANGES>
+
+<FILE Run="/bin/bash">
+<INLINE>
+rm -f $(ls /boot/config/plugins/&name;/&name;*.txz 2>/dev/null|grep -v '&version;')
+</INLINE>
+</FILE>
+
+<FILE Name="/boot/config/plugins/&name;/&name;-&version;.txz" Run="upgradepkg --install-new">
+<URL>&gitURL;/packages/&name;-&version;.txz</URL>
+<MD5>&md5;</MD5>
+</FILE>
+
+<FILE Name="&emhttp;/README.md">
+<INLINE>
+**DVB Driver**
+
+DVB Drivers for Unraid.  
+Supported driver packages: LibreELEC, TBS-OpenSource, DigitalDevices and Plex PX Series Tuners (Japan).
+</INLINE>
+</FILE>
+
+<FILE Run="/bin/bash">
+<INLINE>
+
+download_package() {
+# Download DVB-Driver-Package
+if wget -q -nc -O "&packages;/${KERNEL_V%%-*}/${LAT_PACKAGE}" "${DL_URL}/${LAT_PACKAGE}" ; then
+  wget -q -nc -O "&packages;/${KERNEL_V%%-*}/${LAT_PACKAGE}.md5" "${DL_URL}/${LAT_PACKAGE}.md5"
+  if [ "$(md5sum &packages;/${KERNEL_V%%-*}/${LAT_PACKAGE} | awk '{print $1}')" != "$(cat &packages;/${KERNEL_V%%-*}/${LAT_PACKAGE}.md5 | awk '{print $1}')" ]; then
+    echo
+    echo "---CHECKSUM ERROR!---"
+    rm -rf &plugin; &emhttp;
+    exit 1
+  fi
+  echo
+  echo "-----------Successfully downloaded ${PACKAGE}-DVB-Driver-Package------------"
+  echo "------------------------Please wait, installing...!-------------------------"
+else
+  echo
+  echo "---------------Can't download ${PACKAGE}-DVB-Driver-Package-----------------"
+  rm -rf &plugin; &emhttp;
+  exit 1
+fi
+}
+
+check_package() {
+if ! ls -1 &packages;/${KERNEL_V%%-*}/ | grep -q "${PACKAGE}" ; then
+  LAT_PACKAGE="$(wget -qO- https://api.github.com/repos/ich777/unraid-dvb-driver/releases/tags/${KERNEL_V} | jq -r '.assets[].name' | grep "${PACKAGE}" | grep -E -v '\.md5$' | sort -V | tail -1)"
+  echo
+  echo "-----------------Downloading ${PACKAGE}-DVB-Driver-Package-------------------"
+  echo "---------This could take some time, please don't close this window!---------"
+  download_package
+else
+  echo
+  echo "-----------------${PACKAGE}-DVB-Driver-Package found locally-----------------"
+fi
+}
+
+install_package() {
+#Install driver package
+if [ "${PACKAGE}" == "tbsos" ]; then
+  if lsmod | grep "videobuf2-common" &amp;>/dev/null ; then
+    modprobe -rf videobuf2-common
+    sleep 2
+  fi
+fi
+/sbin/installpkg "&packages;/${KERNEL_V%%-*}/${PACKAGE}*.txz"
+depmod -a 2>/dev/null
+sleep 4
+udevadm control --reload 2>/dev/null &amp;&amp; udevadm trigger --action=add 2>/dev/null
+}
+
+# Define Variables
+KERNEL_V="$(uname -r)"
+DL_URL="https://github.com/ich777/unraid-dvb-driver/releases/download/$KERNEL_V"
+
+if [ ! -d "&packages;/${KERNEL_V%%-*}" ]; then
+  mkdir -p "&packages;/${KERNEL_V%%-*}"
+fi
+
+# Create settings file if not found
+if [ ! -f "&plugin;/settings.cfg" ]; then
+  echo 'first_installation=true
+dvb_package=libreelec' > "&plugin;/settings.cfg"
+fi
+
+# Get prefered package version and latest version from GitHub
+PACKAGE="$(grep "dvb_package" "&plugin;/settings.cfg" | cut -d '=' -f2)"
+
+#Check if 'xboxone' package is selected, if yes change it to 'libreelec'
+if [ "$(cat &plugin;/settings.cfg | grep "dvb_package" | cut -d '=' -f2)" == "xboxone" ]; then
+  echo
+  echo "---XboxOneUSB-Driver-Package isn't available anymore changing to LibreELEC---"
+  sed -i "/dvb_package=/c\dvb_package=libreelec" "&plugin;/settings.cfg"
+fi
+
+#Check for old packages that are not suitable for this Kernel
+rm -rf $(ls -d &packages;/* | grep -v "${KERNEL_V%%-*}")
+rm -rf $(find &packages;/${KERNEL_V%%-*}/ -type f -maxdepth 1 | grep -v "$(cat &plugin;/settings.cfg | grep "dvb_package" | cut -d '=' -f2)")
+
+#Check if DVB-Driver-Package is already downloaded
+check_package
+if [ ! "$(ls -1 /var/log/packages/ | grep -E "digitaldevices|libreelec|px4drv|tbsos")" ]; then
+  install_package >/dev/null
+fi
+
+#Generate dvb-driver list
+if [ ! -f /tmp/dvb-driver ]; then
+  for ((i=0; i&lt;=15; i++))
+  do
+    module=$(dmesg | grep -i dvb | grep -i "adapter $i" | cut -d ']' -f2 | cut -d ' ' -f2 | head -1 2>/dev/null)
+    if [ ! -z "${module}" ]; then
+      version=$(modinfo "$(dmesg | grep -i dvb | grep -i "adapter $i" | cut -d ']' -f2 | cut -d ' ' -f2 | head -1)" | grep "version" | head -1 | cut -d ' ' -f9 2>/dev/null)
+      echo "$module $version" >> /tmp/dvb-driver
+    fi
+    unset module version
+  done
+fi
+
+#Display message to restart
+if [ "$(grep "first_installation=" "&plugin;/settings.cfg" | cut -d '=' -f2)" == "true" ]; then
+  /usr/local/emhttp/plugins/dynamix/scripts/notify -e "DVB Driver" -d "Please reboot your server in order to activate the DVB-Driver-Package (by default LibreELEC) ATTENTION: Please update your 'go' file if the plugin doesn't load the Kernel Module correctly for you DVB card, for more information see the DVB Plugin page." -i "alert" -l "Main"
+  sed -i '/first_installation=true/c\first_installation=false' "&plugin;/settings.cfg"
+  echo
+  echo "---------------Installation of DVB-Driver-Package successful----------------"
+  echo
+  echo "-----------------------------------------------------------------------------"
+  echo "---Please reboot your server in order to activate the DVB-Driver-Package!----"
+  echo "-----------------------------------------------------------------------------"
+  echo
+else
+  echo
+  echo "---------------Installation of DVB-Driver-Package successful----------------"
+  echo
+fi
+
+#Check if Plugin Update Helper is downloaded and up-to-date
+if [ ! -f &plugin;/plugin_update_helper ]; then
+  wget -q -T 5 -O &plugin;/plugin_update_helper "https://raw.githubusercontent.com/ich777/unraid-plugin_update_helper/master/plugin_update_helper"
+else
+  CUR_V="$(grep -E "Plugin-Update-Helper version:" &plugin;/plugin_update_helper | awk '{print $4}')"
+  if [ ! -s /tmp/update-helper ]; then
+    echo "$(wget -T5 -qO- https://raw.githubusercontent.com/ich777/unraid-plugin_update_helper/master/plugin_update_helper | grep -E "Plugin-Update-Helper version:" | awk '{print $4}')" > /tmp/update-helper
+    AVAIL_V="$(cat /tmp/update-helper)"
+  else
+    AVAIL_V="$(cat /tmp/update-helper)"
+  fi
+  if [ ! -z "$AVAIL_V" ]; then
+    COMPARE="$(sort -V &lt;(echo -e "${AVAIL_V}\n$CUR_V") | tail -1)"
+    if [ "$CUR_V" != "$COMPARE" ]; then
+      wget -q -T 5 -O &plugin;/plugin_update_helper "https://raw.githubusercontent.com/ich777/unraid-plugin_update_helper/master/plugin_update_helper"
+    fi
+  fi
+fi
+
+#Check if Plugin Update Helper is installed and up to date
+if [ ! -f /usr/bin/plugin_update_helper ]; then
+  cp &plugin;/plugin_update_helper /usr/bin/plugin_update_helper
+  chmod +x /usr/bin/plugin_update_helper
+else
+  PLUGIN_V="$(grep -E "Plugin-Update-Helper version:" &plugin;/plugin_update_helper | awk '{print $4}')"
+  INST_V="$(grep -E "Plugin-Update-Helper version:" /usr/bin/plugin_update_helper | awk '{print $4}')"
+  COMPARE="$(sort -V &lt;(echo -e "${PLUGIN_V}\n$INST_V") | tail -1)"
+  if [ "$INST_V" != "$COMPARE" ]; then
+    kill $(ps aux | grep -E "inotifywait -q /boot/changes.txt -e move_self,delete_self" | grep -v "grep -E inotifywait" | awk '{print $2}') 2>/dev/null
+    sleep 1
+    cp &plugin;/plugin_update_helper /usr/bin/plugin_update_helper
+    chmod +x /usr/bin/plugin_update_helper
+  fi
+fi
+
+#Start Plugin Update Helper
+if [ -z "$(ps aux | grep -E "inotifywait -q /boot/changes.txt -e move_self,delete_self" | grep -v "grep -E inotifywait" | awk '{print $2}')" ]; then
+  echo "/usr/bin/plugin_update_helper" | at now &gt; /dev/null 2&gt;&amp;1
+fi
+
+</INLINE>
+</FILE>
+
+<FILE Run="/bin/bash" Method="remove">
+<INLINE>
+
+echo "----------------------------------------"
+echo "---Uninstalling DVB-Driver-Package---"
+echo "----------------------------------------"
+# Remove plugin related files
+removepkg &name;-&version; >/dev/null 2>&amp;1
+rm -rf &emhttp;
+rm -rf &plugin;
+echo
+echo "----------------------------------------------------------------------------"
+echo "--------DVB-Driver-Package uninstalled, please reboot your server!----------"
+echo "----------------------------------------------------------------------------"
+echo
+
+</INLINE>
+</FILE>
+</PLUGIN>
