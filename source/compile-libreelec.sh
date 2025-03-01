@@ -37,6 +37,11 @@ mkdir -p /libreelec/lib/firmware
 tar -C ${DATA_DIR}/lE-v${LE_DRV_V} --strip-components=1 -xf ${DATA_DIR}/lE-v${LE_DRV_V}.tar.gz
 rsync -av ${DATA_DIR}/lE-v${LE_DRV_V}/firmware/ /libreelec/lib/firmware/
 
+# Add additional missing Firmware
+if [ ! -f /libreelec/lib/firmware/dvb-demod-mxl692.fw ]; then
+  tar -C /libreelec/lib/firmware/ -xvf ${DATA_DIR}/hauppauge_fw_20230602.tar.gz
+fi
+
 # Copy DVB Modules over to LibreELEC temporary directory
 cp -R /DVBModules/* /libreelec/
 
