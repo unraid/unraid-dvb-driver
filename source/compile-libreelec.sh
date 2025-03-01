@@ -38,7 +38,7 @@ tar -C ${DATA_DIR}/lE-v${LE_DRV_V} --strip-components=1 -xf ${DATA_DIR}/lE-v${LE
 rsync -av ${DATA_DIR}/lE-v${LE_DRV_V}/firmware/ /libreelec/lib/firmware/
 
 # Add additional missing Firmware
-if [ ! -f /libreelec/lib/firmware/dvb-demod-mxl692.fw ]; then
+if [ ! -f /libreelec/lib/firmware/dvb-demod-si2165.fw ]; then
   tar -C /libreelec/lib/firmware/ -xvf ${DATA_DIR}/hauppauge_fw_20230602.tar.gz
 fi
 
